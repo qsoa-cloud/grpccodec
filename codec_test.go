@@ -54,6 +54,13 @@ type panicMsg struct{ fastMsg }
 
 func (m *panicMsg) Unmarshal([]byte) error { panic("boom") }
 
+type shortMsg struct{ fastMsg }
+
+func (m *shortMsg) MarshalToSizedBuffer(b []byte) (int, error) {
+	n, err := m.fastMsg.MarshalToSizedBuffer(b)
+	return n - 1, err
+}
+
 func roundTrip(t testing.TB, in, out any) {
 	data, err := Codec.Marshal(in)
 	if err != nil {
@@ -114,6 +121,14 @@ func TestUnmarshalPanicIsError(t *testing.T) {
 	data := mem.BufferSlice{mem.SliceBuffer([]byte{0x0a, 0x01, 'x'})}
 	if err := Codec.Unmarshal(data, &panicMsg{}); err == nil {
 		t.Fatal("want error from panicking Unmarshal")
+	}
+}
+
+func TestMarshalShortWriteIsError(t *testing.T) {
+	for _, n := range []int{10, 2 << 10} {
+		if _, err := Codec.Marshal(&shortMsg{fastMsg{data: bytes.Repeat([]byte{'x'}, n)}}); err == nil {
+			t.Errorf("size %d: want error from short MarshalToSizedBuffer", n)
+		}
 	}
 }
 

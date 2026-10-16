@@ -31,18 +31,26 @@ func (c *codec) Marshal(v any) (mem.BufferSlice, error) {
 	size := m.Size()
 	if mem.IsBelowBufferPoolingThreshold(size) {
 		buf := make([]byte, size)
-		if _, err := m.MarshalToSizedBuffer(buf); err != nil {
+		if err := marshal(m, buf); err != nil {
 			return nil, err
 		}
 		return mem.BufferSlice{mem.SliceBuffer(buf)}, nil
 	}
 	pool := mem.DefaultBufferPool()
 	buf := pool.Get(size)
-	if _, err := m.MarshalToSizedBuffer(*buf); err != nil {
+	if err := marshal(m, *buf); err != nil {
 		pool.Put(buf)
 		return nil, err
 	}
 	return mem.BufferSlice{mem.NewBuffer(buf, pool)}, nil
+}
+
+func marshal(m fastMessage, b []byte) error {
+	n, err := m.MarshalToSizedBuffer(b)
+	if err == nil && n != len(b) {
+		err = fmt.Errorf("codec: marshal %T: wrote %d of %d bytes", m, n, len(b))
+	}
+	return err
 }
 
 func (c *codec) Unmarshal(data mem.BufferSlice, v any) (err error) {
